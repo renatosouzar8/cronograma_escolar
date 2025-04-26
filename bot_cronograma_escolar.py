@@ -1,13 +1,19 @@
 #!/usr/bin/env python3
 """
-Bot Cronograma Escolar – lembrete 1 dia antes (14 h) via Webhook
-Versão final – webhook no Render
+Bot Cronograma Escolar – lembrete 1 dia antes (14 h) via Webhook no Render
 
 Dependências (requirements.txt):
-python-telegram-bot[job-queue]==20.8
-pytz==2024.1
-python-dotenv==1.0.1
+  python-telegram-bot[job-queue]==20.8
+  pytz==2024.1
+  python-dotenv==1.0.1
+
+Estrutura:
+  ├── bot_cronograma_escolar.py   # este script
+  ├── requirements.txt
+  ├── cronogramas/                # CSVs data;hora;titulo;descricao;local
+  └── .env                        # TELEGRAM_TOKEN, NOTIFICATION_HOUR, optional WEBHOOK_URL
 """
+
 import os
 import csv
 import json
@@ -24,21 +30,25 @@ from telegram.ext import (
     ContextTypes,
 )
 
-# ─── Configuração ────────────────────────────────────────────────────────────
+# ─── Configuração ──────────────────────────────────────────
 load_dotenv()
-TOKEN = os.getenv("TELEGRAM_TOKEN") or exit("Falta TELEGRAM_TOKEN no .env")
-HOUR = int(os.getenv("NOTIFICATION_HOUR", "14"))
-PORT = int(os.getenv("PORT", "10000"))
-# URL pública do seu serviço no Render (ou defina WEBHOOK_URL no .env)
-WEBHOOK_URL = os.getenv("WEBHOOK_URL", f"https://cronograma-escolar.onrender.com/{TOKEN}")
+TOKEN = os.getenv("TELEGRAM_TOKEN")
+if not TOKEN:
+    raise RuntimeError("Falta TELEGRAM_TOKEN no .env")
 
+HOUR = int(os.getenv("NOTIFICATION_HOUR", "14"))
+# Render define PORT automaticamente
+PORT = int(os.getenv("PORT", "10000"))
+
+# domínio público do webhook (ou defina em .env)
+DOMAIN = os.getenv("WEBHOOK_DOMAIN", "https://cronograma-escolar.onrender.com")
+WEBHOOK_URL = os.getenv("WEBHOOK_URL", f"{https://cronograma-escolar.onrender.com/7981598752:AAFCkvUV-b_9HogUDCMUBbjAdcGbLBt48lU")
+
+# Fuso horário e caminhos
 TZ = pytz.timezone("America/Sao_Paulo")
-BASE_DIR = Path(__file__).parent
+BASE_DIR = Path(__file__).parent.resolve()
 CRON_DIR = BASE_DIR / "cronogramas"
 SUBS_FILE = BASE_DIR / "subscribers.json"
-
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
-log = logging.getLogger(__name__)
 
 # Comandos para autocomplete
 COMMANDS = [
@@ -49,26 +59,39 @@ COMMANDS = [
     ("menu",     "Mostrar menu de ajuda"),
 ]
 
-# ─── post_init: limpa webhook e registra comandos ─────────────────────────────
+logging.basicConfig(
+    format="%(asctime)s %(levelname)s %(message)s",
+    level=logging.INFO,
+)
+log = logging.getLogger(__name__)
+
+
+# ─── post_init: limpa webhook pendente e registra comandos ─────────────────
 async def post_init(app):
+    # remove qualquer webhook anterior e descarta updates pendentes
     await app.bot.delete_webhook(drop_pending_updates=True)
+    # define comandos para o cliente Telegram
     await app.bot.set_my_commands(COMMANDS)
     log.info("Webhook limpo e comandos registrados")
 
-# ─── Funções auxiliares ───────────────────────────────────────────────────────
+
+# ─── Utilitários ───────────────────────────────────────────────
 def parse_date(s: str) -> date | None:
     for fmt in ("%d/%m/%Y", "%d/%m/%y"):
         try:
             return datetime.strptime(s.strip(), fmt).date()
         except ValueError:
-            pass
+            continue
     return None
 
+
 def load_events() -> list[dict]:
+    """Lê todos os CSVs em cronogramas/ e retorna eventos."""
     events = []
     if not CRON_DIR.exists():
         log.warning("Pasta cronogramas/ não encontrada ou vazia.")
         return events
+
     for csv_path in CRON_DIR.glob("*.csv"):
         with csv_path.open(encoding="utf-8-sig") as f:
             reader = csv.DictReader(f, delimiter=";")
@@ -86,13 +109,16 @@ def load_events() -> list[dict]:
     log.info("Eventos lidos: %d", len(events))
     return events
 
+
 def load_subs() -> list[int]:
     return json.loads(SUBS_FILE.read_text()) if SUBS_FILE.exists() else []
+
 
 def save_subs(subs: list[int]):
     SUBS_FILE.write_text(json.dumps(subs))
 
-# ─── Comandos Telegram ───────────────────────────────────────────────────────
+
+# ─── Handlers de comando ────────────────────────────────────────────
 async def start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     cid = update.effective_chat.id
     subs = load_subs()
@@ -100,10 +126,10 @@ async def start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         subs.append(cid)
         save_subs(subs)
     await update.message.reply_text(
-        "✅ Inscrito! Você receberá lembretes às "
-        f"{HOUR}h do dia anterior aos eventos.\n"
+        f"✅ Inscrito! Você receberá lembretes às {HOUR}h do dia anterior.\n"
         "Use /proximos, /hoje ou /menu."
     )
+
 
 async def stop(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     cid = update.effective_chat.id
@@ -113,16 +139,17 @@ async def stop(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         save_subs(subs)
     await update.message.reply_text("🛑 Você foi removido e não receberá mais lembretes.")
 
+
 async def proximos(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     today = datetime.now(TZ).date()
-    eventos = [e for e in sorted(load_events(), key=lambda e: e["date"]) if e["date"] >= today]
-    if not eventos:
+    evs = [e for e in sorted(load_events(), key=lambda e: e["date"]) if e["date"] >= today]
+    if not evs:
         await update.message.reply_text("Nenhum evento futuro encontrado.")
         return
 
     grupos: dict[str, list[dict]] = {}
-    for ev in eventos:
-        grupos.setdefault(ev["src"], []).append(ev)
+    for e in evs:
+        grupos.setdefault(e["src"], []).append(e)
 
     msgs = []
     LIMITE = 5
@@ -135,16 +162,17 @@ async def proximos(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text("\n\n".join(msgs), parse_mode="Markdown")
 
+
 async def hoje(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    amanha = (datetime.now(TZ) + timedelta(days=1)).date()
-    evs = [e for e in load_events() if e["date"] == amanha]
+    tomorrow = (datetime.now(TZ) + timedelta(days=1)).date()
+    evs = [e for e in load_events() if e["date"] == tomorrow]
     if not evs:
         await update.message.reply_text("Não há eventos agendados para amanhã.")
         return
 
     grupos: dict[str, list[dict]] = {}
-    for ev in evs:
-        grupos.setdefault(ev["src"], []).append(ev)
+    for e in evs:
+        grupos.setdefault(e["src"], []).append(e)
 
     partes = []
     for src, lista in grupos.items():
@@ -156,8 +184,9 @@ async def hoje(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text("\n\n".join(partes), parse_mode="Markdown")
 
+
 async def menu(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    teclas = [["/hoje","/proximos"], ["/start","/stop"]]
+    teclas = [["/hoje", "/proximos"], ["/start", "/stop"]]
     kb = ReplyKeyboardMarkup(teclas, resize_keyboard=True, one_time_keyboard=True)
     texto = (
         "*Menu de comandos*\n\n"
@@ -168,11 +197,12 @@ async def menu(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     )
     await update.message.reply_text(texto, parse_mode="Markdown", reply_markup=kb)
 
-# ─── Notificação ────────────────────────────────────────────────────────────
+
+# ─── Notificação agendada ────────────────────────────────────────────
 async def notify(ctx: ContextTypes.DEFAULT_TYPE):
     ev = ctx.job.data
     msg = "🗓️ *Lembrete de amanhã!*\n"
-    msg += f"*Data:* {ev['date'].strftime('%d/%m')}  "
+    msg += f"*Data:* {ev['date'].strftime('%d/%m')}\n"
     msg += f"*Evento:* {ev['title']}\n"
     if ev["local"]:
         msg += f"*Local:* {ev['local']}\n"
@@ -183,7 +213,7 @@ async def notify(ctx: ContextTypes.DEFAULT_TYPE):
     for cid in load_subs():
         await ctx.bot.send_message(cid, msg, parse_mode="Markdown")
 
-# ─── Agendamento dos lembretes ──────────────────────────────────────────────
+
 def schedule_jobs(app):
     now = datetime.now(TZ)
     for ev in load_events():
@@ -196,9 +226,9 @@ def schedule_jobs(app):
             app.job_queue.run_once(notify, when=run_dt, data=ev)
             log.info("Agendado %s para %s", ev["title"], run_dt)
 
-# ─── Inicialização via Webhook ──────────────────────────────────────────────
+
+# ─── Inicialização via Webhook ─────────────────────────────────────────
 if __name__ == "__main__":
-    # cria o app e registra post_init
     app = (
         ApplicationBuilder()
         .token(TOKEN)
@@ -207,24 +237,29 @@ if __name__ == "__main__":
     )
 
     # registra handlers
-    app.add_handler(CommandHandler("start",    start))
-    app.add_handler(CommandHandler("stop",     stop))
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("stop", stop))
     app.add_handler(CommandHandler("proximos", proximos))
-    app.add_handler(CommandHandler("hoje",     hoje))
-    app.add_handler(CommandHandler("menu",     menu))
+    app.add_handler(CommandHandler("hoje", hoje))
+    app.add_handler(CommandHandler("menu", menu))
 
-    # agenda todos os lembretes
+    # agenda lembretes
     schedule_jobs(app)
 
-    # configura webhook no Telegram
+    # define webhook no Telegram
     log.info("Definindo webhook URL: %s", WEBHOOK_URL)
-    app.bot.set_webhook(WEBHOOK_URL)
+    # a chamada abaixo deve estar dentro de post_init ou ser await-ed,
+    # mas o python-telegram-bot executa callbacks post_init automaticamente.
+    # Se necessário, mova set_webhook para dentro de post_init.
+    # Exemplo:
+    # await app.bot.set_webhook(WEBHOOK_URL)
 
-    # inicia o servidor HTTP para receber as atualizações
+    # inicia o servidor HTTP para receber as atualizações do Telegram
     log.info("Iniciando listener webhook na porta %d", PORT)
     app.run_webhook(
         listen="0.0.0.0",
         port=PORT,
-        path=f"/{cronograma-escolar.onrender.com/7981598752:AAFCkvUV-b_9HogUDCMUBbjAdcGbLBt48lU}",
+        path=f"/{/7981598752:AAFCkvUV-b_9HogUDCMUBbjAdcGbLBt48lU}",
+        webhook_url=WEBHOOK_URL,
         drop_pending_updates=True,
     )
