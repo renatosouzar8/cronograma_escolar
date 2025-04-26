@@ -39,7 +39,9 @@ load_dotenv()
 TOKEN = os.getenv("TELEGRAM_TOKEN") or exit("Falta TELEGRAM_TOKEN no .env")
 TZ = pytz.timezone("America/Sao_Paulo")
 HOUR = int(os.getenv("NOTIFICATION_HOUR", 14))
-CRON_DIR = Path("cronogramas")
+# Garante que procura a pasta ao lado do script, não no cwd genérico
+CRON_DIR = Path(__file__).parent / "cronogramas"
+
 SUBS_FILE = Path("subscribers.json")
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
