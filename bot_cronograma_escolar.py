@@ -196,6 +196,9 @@ COMMANDS = [
 ]
 
 async def post_init(app):
+    # 1) limpa qualquer webhook ativo
+    await app.bot.delete_webhook(drop_pending_updates=True)
+    # 2) registra comandos para autocomplete
     await app.bot.set_my_commands(COMMANDS)
 
 # ─── Main ───────────────────────────────────────────────
