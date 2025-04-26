@@ -225,6 +225,6 @@ if __name__ == "__main__":
     app.run_webhook(
         listen="0.0.0.0",
         port=PORT,
-        path=f"/{https://cronograma-escolar.onrender.com/7981598752:AAFCkvUV-b_9HogUDCMUBbjAdcGbLBt48lU}",
+        path=f"/{cronograma-escolar.onrender.com/7981598752:AAFCkvUV-b_9HogUDCMUBbjAdcGbLBt48lU}",
         drop_pending_updates=True,
     )
