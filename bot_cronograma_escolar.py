@@ -234,10 +234,10 @@ if __name__ == "__main__":
     log.info("Definindo webhook URL: %s", WEBHOOK_URL)
     log.info("Iniciando listener webhook na porta %d", PORT)
     # start webhook listener (não usar polling em ambiente de webhooks)
+    # CORREÇÃO: Removido o parâmetro 'path' que estava causando o erro
     app.run_webhook(
         listen="0.0.0.0",
         port=PORT,
-        path=f"/{token}",
         webhook_url=WEBHOOK_URL,
         drop_pending_updates=True,
     )
