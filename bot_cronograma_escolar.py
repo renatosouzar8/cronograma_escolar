@@ -6,7 +6,6 @@ Dependências (requirements.txt):
   python-telegram-bot[job-queue,webhooks]==20.8
   pytz==2024.1
   python-dotenv==1.0.1
-  flask==2.3.3
 
 Estrutura:
   ├── bot_cronograma_escolar.py   # este script
@@ -20,6 +19,8 @@ import json
 import logging
 from datetime import datetime, date, time, timedelta
 from pathlib import Path
+import http.server
+import socketserver
 import threading
 
 import pytz
@@ -31,7 +32,6 @@ from telegram.ext import (
     MessageHandler,
     filters,
 )
-from flask import Flask, jsonify
 
 # ─── Configuração ──────────────────────────────────────────
 # Token fornecido e webhook configurado
@@ -63,13 +63,20 @@ logging.basicConfig(
 )
 log = logging.getLogger(__name__)
 
-# ─── Inicialização da aplicação Flask para health check ──────
-app = Flask(__name__)
+# ─── Configuração do Health Check ──────────────────────────────
+class HealthCheckHandler(http.server.SimpleHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.send_header('Content-type', 'application/json')
+        self.end_headers()
+        self.wfile.write(json.dumps({"status": "ok", "message": "O serviço está funcionando!"}).encode())
+        log.info("Recebida requisição de health check em %s", self.path)
 
-@app.route('/')
-def health_check():
-    """Endpoint de health check para o Render"""
-    return jsonify({"status": "ok", "message": "O serviço está funcionando!"})
+def run_health_check_server(port):
+    handler = HealthCheckHandler
+    with socketserver.TCPServer(("", port), handler) as httpd:
+        log.info("Servidor de health check iniciado na porta %s", port)
+        httpd.serve_forever()
 
 # ─── post_init: limpa webhook pendente, registra comandos e define webhook ────
 async def post_init(application):
@@ -303,18 +310,19 @@ def schedule_jobs(telegram_app):
         else:
             log.info("Evento %s ignorado (já passou: %s)", ev["title"], run_dt)
 
-# ─── Função para iniciar o servidor Flask em uma thread separada ───────
-def run_flask():
-    log.info("Iniciando servidor Flask para health check na porta %d", PORT)
-    app.run(host="0.0.0.0", port=PORT)
+# ─── Função para iniciar o servidor de health check em uma thread separada ───────
+def run_health_server():
+    health_port = int(os.getenv("HEALTH_PORT", PORT))
+    log.info("Iniciando servidor de health check na porta %d", health_port)
+    run_health_check_server(health_port)
 
 # ─── Inicialização via Webhook ─────────────────────────────────────────
 if __name__ == "__main__":
     log.info("Iniciando aplicação...")
     
-    # Cria uma thread para o servidor Flask
-    flask_thread = threading.Thread(target=run_flask)
-    flask_thread.daemon = True  # A thread terminará quando o programa principal terminar
+    # Cria uma thread para o servidor de health check
+    health_thread = threading.Thread(target=run_health_server)
+    health_thread.daemon = True  # A thread terminará quando o programa principal terminar
     
     telegram_app = (
         ApplicationBuilder()
@@ -339,15 +347,15 @@ if __name__ == "__main__":
 
     log.info("Definindo webhook URL: %s", WEBHOOK_URL)
     
-    # Inicia o servidor Flask em uma thread separada
-    flask_thread.start()
-    log.info("Servidor Flask iniciado em thread separada")
+    # Inicia o servidor de health check em uma thread separada
+    health_thread.start()
+    log.info("Servidor de health check iniciado em thread separada")
     
     log.info("Preparando webhook handler na URL %s", WEBHOOK_URL)
     # Configura o webhook para receber atualizações do Telegram
     telegram_app.run_webhook(
         listen="0.0.0.0",
-        port=int(os.getenv("TELEGRAM_PORT", "8443")),  # Porta diferente para o webhook do Telegram
+        port=PORT,
         webhook_url=WEBHOOK_URL,
         drop_pending_updates=True,
     )
