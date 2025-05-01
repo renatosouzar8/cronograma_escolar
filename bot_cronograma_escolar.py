@@ -1,17 +1,15 @@
 #!/usr/bin/env python3
 """
-Bot Cronograma Escolar – lembrete 1 dia antes (14 h) via Webhook no Render
+Bot Cronograma Escolar – lembrete 1 dia antes (14h) via Webhook no Render
 
 Dependências (requirements.txt):
   python-telegram-bot[job-queue]==20.8
   pytz==2024.1
-  python-dotenv==1.0.1
 
 Estrutura:
   ├── bot_cronograma_escolar.py   # este script
   ├── requirements.txt
-  ├── cronogramas/                # CSVs data;hora;titulo;descricao;local
-  └── .env                        # TELEGRAM_TOKEN, NOTIFICATION_HOUR, optional WEBHOOK_URL
+  └── cronogramas/                # CSVs data;hora;titulo;descricao;local
 """
 
 import os
@@ -22,7 +20,6 @@ from datetime import datetime, date, time, timedelta
 from pathlib import Path
 
 import pytz
-from dotenv import load_dotenv
 from telegram import Update, ReplyKeyboardMarkup
 from telegram.ext import (
     ApplicationBuilder,
@@ -31,23 +28,17 @@ from telegram.ext import (
 )
 
 # ─── Configuração ──────────────────────────────────────────
-load_dotenv()
-TOKEN = os.getenv("TELEGRAM_TOKEN")
-if not TOKEN:
-    raise RuntimeError("Falta TELEGRAM_TOKEN no .env")
-
-HOUR = int(os.getenv("NOTIFICATION_HOUR", "14"))
-# Render define PORT automaticamente
-PORT = int(os.getenv("PORT", "10000"))
-
-# domínio público do webhook (ou defina em .env)
-DOMAIN = os.getenv("WEBHOOK_DOMAIN", "https://cronograma-escolar.onrender.com")
-WEBHOOK_URL = os.getenv("WEBHOOK_URL", f"{https://cronograma-escolar.onrender.com}/{7981598752:AAFCkvUV-b_9HogUDCMUBbjAdcGbLBt48lU}")
+# Token e webhook já definidos conforme informado
+TOKEN       = "7981598752:AAFCkvUV-b_9HogUDCMUBbjAdcGbLBt48lU"
+HOUR        = int(os.getenv("NOTIFICATION_HOUR", "14"))
+PORT        = int(os.getenv("PORT", "10000"))
+DOMAIN      = "https://cronograma-escolar.onrender.com"
+WEBHOOK_URL = f"{DOMAIN}/{TOKEN}"
 
 # Fuso horário e caminhos
-TZ = pytz.timezone("America/Sao_Paulo")
-BASE_DIR = Path(__file__).parent.resolve()
-CRON_DIR = BASE_DIR / "cronogramas"
+TZ        = pytz.timezone("America/Sao_Paulo")
+BASE_DIR  = Path(__file__).parent.resolve()
+CRON_DIR  = BASE_DIR / "cronogramas"
 SUBS_FILE = BASE_DIR / "subscribers.json"
 
 # Comandos para autocomplete
@@ -65,15 +56,12 @@ logging.basicConfig(
 )
 log = logging.getLogger(__name__)
 
-
-# ─── post_init: limpa webhook pendente e registra comandos ─────────────────
+# ─── post_init: limpa webhook pendente, registra comandos e define webhook ────
 async def post_init(app):
-    # remove qualquer webhook anterior e descarta updates pendentes
     await app.bot.delete_webhook(drop_pending_updates=True)
-    # define comandos para o cliente Telegram
     await app.bot.set_my_commands(COMMANDS)
-    log.info("Webhook limpo e comandos registrados")
-
+    await app.bot.set_webhook(WEBHOOK_URL)
+    log.info("Webhook limpo, comandos registrados e webhook definido em %s", WEBHOOK_URL)
 
 # ─── Utilitários ───────────────────────────────────────────────
 def parse_date(s: str) -> date | None:
@@ -86,7 +74,6 @@ def parse_date(s: str) -> date | None:
 
 
 def load_events() -> list[dict]:
-    """Lê todos os CSVs em cronogramas/ e retorna eventos."""
     events = []
     if not CRON_DIR.exists():
         log.warning("Pasta cronogramas/ não encontrada ou vazia.")
@@ -116,7 +103,6 @@ def load_subs() -> list[int]:
 
 def save_subs(subs: list[int]):
     SUBS_FILE.write_text(json.dumps(subs))
-
 
 # ─── Handlers de comando ────────────────────────────────────────────
 async def start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
@@ -197,7 +183,6 @@ async def menu(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     )
     await update.message.reply_text(texto, parse_mode="Markdown", reply_markup=kb)
 
-
 # ─── Notificação agendada ────────────────────────────────────────────
 async def notify(ctx: ContextTypes.DEFAULT_TYPE):
     ev = ctx.job.data
@@ -226,7 +211,6 @@ def schedule_jobs(app):
             app.job_queue.run_once(notify, when=run_dt, data=ev)
             log.info("Agendado %s para %s", ev["title"], run_dt)
 
-
 # ─── Inicialização via Webhook ─────────────────────────────────────────
 if __name__ == "__main__":
     app = (
@@ -246,20 +230,13 @@ if __name__ == "__main__":
     # agenda lembretes
     schedule_jobs(app)
 
-    # define webhook no Telegram
     log.info("Definindo webhook URL: %s", WEBHOOK_URL)
-    # a chamada abaixo deve estar dentro de post_init ou ser await-ed,
-    # mas o python-telegram-bot executa callbacks post_init automaticamente.
-    # Se necessário, mova set_webhook para dentro de post_init.
-    # Exemplo:
-    # await app.bot.set_webhook(WEBHOOK_URL)
-
     # inicia o servidor HTTP para receber as atualizações do Telegram
     log.info("Iniciando listener webhook na porta %d", PORT)
     app.run_webhook(
         listen="0.0.0.0",
         port=PORT,
-        path=f"/{/7981598752:AAFCkvUV-b_9HogUDCMUBbjAdcGbLBt48lU}",
+        path=TOKEN,
         webhook_url=WEBHOOK_URL,
         drop_pending_updates=True,
     )
