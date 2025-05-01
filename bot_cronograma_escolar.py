@@ -3,7 +3,7 @@
 Bot Cronograma Escolar – lembrete 1 dia antes (14h) via Webhook no Render
 
 Dependências (requirements.txt):
-  python-telegram-bot[job-queue]==20.8
+  python-telegram-bot[job-queue,webhooks]==20.8
   pytz==2024.1
 
 Estrutura:
