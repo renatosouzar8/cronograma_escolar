@@ -38,6 +38,8 @@ from telegram.ext import (
 token = "7981598752:AAFCkvUV-b_9HogUDCMUBbjAdcGbLBt48lU"
 HOUR = int(os.getenv("NOTIFICATION_HOUR", "14"))
 PORT = int(os.getenv("PORT", "10000"))
+# Porta para o webhook do Telegram (diferente da porta principal)
+TELEGRAM_PORT = int(os.getenv("TELEGRAM_PORT", "8443"))
 DOMAIN = "https://cronograma-escolar.onrender.com"
 WEBHOOK_URL = f"{DOMAIN}/{token}"
 
@@ -71,6 +73,10 @@ class HealthCheckHandler(http.server.SimpleHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(json.dumps({"status": "ok", "message": "O serviço está funcionando!"}).encode())
         log.info("Recebida requisição de health check em %s", self.path)
+    
+    # Desativa o log padrão de cada requisição para evitar poluir os logs
+    def log_message(self, format, *args):
+        return
 
 def run_health_check_server(port):
     handler = HealthCheckHandler
@@ -312,7 +318,8 @@ def schedule_jobs(telegram_app):
 
 # ─── Função para iniciar o servidor de health check em uma thread separada ───────
 def run_health_server():
-    health_port = int(os.getenv("HEALTH_PORT", PORT))
+    # Usa a porta definida na variável PORT para o health check
+    health_port = PORT
     log.info("Iniciando servidor de health check na porta %d", health_port)
     run_health_check_server(health_port)
 
@@ -352,10 +359,10 @@ if __name__ == "__main__":
     log.info("Servidor de health check iniciado em thread separada")
     
     log.info("Preparando webhook handler na URL %s", WEBHOOK_URL)
-    # Configura o webhook para receber atualizações do Telegram
+    # Configura o webhook para receber atualizações do Telegram usando uma porta DIFERENTE
     telegram_app.run_webhook(
         listen="0.0.0.0",
-        port=PORT,
+        port=TELEGRAM_PORT,  # Usa a porta específica para o Telegram
         webhook_url=WEBHOOK_URL,
         drop_pending_updates=True,
     )
