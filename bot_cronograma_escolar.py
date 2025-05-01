@@ -233,13 +233,11 @@ if __name__ == "__main__":
 
     log.info("Definindo webhook URL: %s", WEBHOOK_URL)
     log.info("Iniciando listener webhook na porta %d", PORT)
-    try:
-        app.run_webhook(
-            listen="0.0.0.0",
-            port=PORT,
-            webhook_url=WEBHOOK_URL,
-            drop_pending_updates=True,
-        )
-    except RuntimeError as e:
-        log.warning("Webhooks não suportados (%s); iniciando polling.", e)
-        app.run_polling()
+    # start webhook listener (não usar polling em ambiente de webhooks)
+    app.run_webhook(
+        listen="0.0.0.0",
+        port=PORT,
+        path=f"/{token}",
+        webhook_url=WEBHOOK_URL,
+        drop_pending_updates=True,
+    )
