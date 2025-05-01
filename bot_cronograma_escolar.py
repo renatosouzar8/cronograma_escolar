@@ -29,16 +29,16 @@ from telegram.ext import (
 
 # ─── Configuração ──────────────────────────────────────────
 # Token fornecido e webhook configurado
-TOKEN       = "7981598752:AAFCkvUV-b_9HogUDCMUBbjAdcGbLBt48lU"
-HOUR        = int(os.getenv("NOTIFICATION_HOUR", "14"))
-PORT        = int(os.getenv("PORT", "10000"))
-DOMAIN      = "https://cronograma-escolar.onrender.com"
-WEBHOOK_URL = f"{DOMAIN}/{TOKEN}"
+token = "7981598752:AAFCkvUV-b_9HogUDCMUBbjAdcGbLBt48lU"
+HOUR = int(os.getenv("NOTIFICATION_HOUR", "14"))
+PORT = int(os.getenv("PORT", "10000"))
+DOMAIN = "https://cronograma-escolar.onrender.com"
+WEBHOOK_URL = f"{DOMAIN}/{token}"
 
 # Fuso horário e caminhos
-TZ        = pytz.timezone("America/Sao_Paulo")
-BASE_DIR  = Path(__file__).parent.resolve()
-CRON_DIR  = BASE_DIR / "cronogramas"
+TZ = pytz.timezone("America/Sao_Paulo")
+BASE_DIR = Path(__file__).parent.resolve()
+CRON_DIR = BASE_DIR / "cronogramas"
 SUBS_FILE = BASE_DIR / "subscribers.json"
 
 # Comandos para autocomplete
@@ -64,6 +64,7 @@ async def post_init(app):
     log.info("Webhook limpo, comandos registrados e webhook definido em %s", WEBHOOK_URL)
 
 # ─── Utilitários ───────────────────────────────────────────────
+
 def parse_date(s: str) -> date | None:
     for fmt in ("%d/%m/%Y", "%d/%m/%y"):
         try:
@@ -87,11 +88,11 @@ def load_events() -> list[dict]:
                 if not d:
                     continue
                 events.append({
-                    "date":  d,
+                    "date": d,
                     "title": row.get("titulo") or "(sem título)",
                     "descr": row.get("descricao", "").strip(),
                     "local": row.get("local", "").strip(),
-                    "src":   csv_path.name,
+                    "src": csv_path.name,
                 })
     log.info("Eventos lidos: %d", len(events))
     return events
@@ -215,7 +216,7 @@ def schedule_jobs(app):
 if __name__ == "__main__":
     app = (
         ApplicationBuilder()
-        .token(TOKEN)
+        .token(token)
         .post_init(post_init)
         .build()
     )
@@ -232,9 +233,13 @@ if __name__ == "__main__":
 
     log.info("Definindo webhook URL: %s", WEBHOOK_URL)
     log.info("Iniciando listener webhook na porta %d", PORT)
-    app.run_webhook(
-        listen="0.0.0.0",
-        port=PORT,
-        webhook_url=WEBHOOK_URL,
-        drop_pending_updates=True,
-    )
+    try:
+        app.run_webhook(
+            listen="0.0.0.0",
+            port=PORT,
+            webhook_url=WEBHOOK_URL,
+            drop_pending_updates=True,
+        )
+    except RuntimeError as e:
+        log.warning("Webhooks não suportados (%s); iniciando polling.", e)
+        app.run_polling()
