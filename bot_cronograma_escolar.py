@@ -28,7 +28,7 @@ from telegram.ext import (
 )
 
 # ─── Configuração ──────────────────────────────────────────
-# Token e webhook já definidos conforme informado
+# Token fornecido e webhook configurado
 TOKEN       = "7981598752:AAFCkvUV-b_9HogUDCMUBbjAdcGbLBt48lU"
 HOUR        = int(os.getenv("NOTIFICATION_HOUR", "14"))
 PORT        = int(os.getenv("PORT", "10000"))
@@ -231,12 +231,10 @@ if __name__ == "__main__":
     schedule_jobs(app)
 
     log.info("Definindo webhook URL: %s", WEBHOOK_URL)
-    # inicia o servidor HTTP para receber as atualizações do Telegram
     log.info("Iniciando listener webhook na porta %d", PORT)
     app.run_webhook(
         listen="0.0.0.0",
         port=PORT,
-        path=TOKEN,
         webhook_url=WEBHOOK_URL,
         drop_pending_updates=True,
     )
