@@ -6,6 +6,7 @@ Dependências (requirements.txt):
   python-telegram-bot[job-queue,webhooks]==20.8
   pytz==2024.1
   python-dotenv==1.0.1
+  flask==2.3.3
 
 Estrutura:
   ├── bot_cronograma_escolar.py   # este script
@@ -19,6 +20,7 @@ import json
 import logging
 from datetime import datetime, date, time, timedelta
 from pathlib import Path
+import threading
 
 import pytz
 from telegram import Update, ReplyKeyboardMarkup
@@ -29,6 +31,7 @@ from telegram.ext import (
     MessageHandler,
     filters,
 )
+from flask import Flask, jsonify
 
 # ─── Configuração ──────────────────────────────────────────
 # Token fornecido e webhook configurado
@@ -60,21 +63,29 @@ logging.basicConfig(
 )
 log = logging.getLogger(__name__)
 
+# ─── Inicialização da aplicação Flask para health check ──────
+app = Flask(__name__)
+
+@app.route('/')
+def health_check():
+    """Endpoint de health check para o Render"""
+    return jsonify({"status": "ok", "message": "O serviço está funcionando!"})
+
 # ─── post_init: limpa webhook pendente, registra comandos e define webhook ────
-async def post_init(app):
-    await app.bot.delete_webhook(drop_pending_updates=True)
-    await app.bot.set_my_commands(COMMANDS)
+async def post_init(application):
+    await application.bot.delete_webhook(drop_pending_updates=True)
+    await application.bot.set_my_commands(COMMANDS)
     
     # Registra detalhes do webhook antes de configurá-lo
-    webhook_info = await app.bot.get_webhook_info()
+    webhook_info = await application.bot.get_webhook_info()
     log.info("Status atual do webhook: %s", webhook_info)
     
     # Configura o webhook
-    result = await app.bot.set_webhook(WEBHOOK_URL)
+    result = await application.bot.set_webhook(WEBHOOK_URL)
     log.info("Resultado da configuração do webhook: %s", result)
     
     # Verifica se o webhook foi configurado corretamente
-    webhook_info = await app.bot.get_webhook_info()
+    webhook_info = await application.bot.get_webhook_info()
     log.info("Status do webhook após configuração: %s", webhook_info)
     
     log.info("Webhook limpo, comandos registrados e webhook definido em %s", WEBHOOK_URL)
@@ -277,7 +288,7 @@ async def notify(ctx: ContextTypes.DEFAULT_TYPE):
             log.error("Erro ao enviar notificação para %s: %s", cid, e)
 
 
-def schedule_jobs(app):
+def schedule_jobs(telegram_app):
     now = datetime.now(TZ)
     log.info("Agendando lembretes (hora atual: %s)", now)
     for ev in load_events():
@@ -287,15 +298,25 @@ def schedule_jobs(app):
             tzinfo=TZ
         )
         if run_dt > now:
-            app.job_queue.run_once(notify, when=run_dt, data=ev)
+            telegram_app.job_queue.run_once(notify, when=run_dt, data=ev)
             log.info("Agendado %s para %s", ev["title"], run_dt)
         else:
             log.info("Evento %s ignorado (já passou: %s)", ev["title"], run_dt)
 
+# ─── Função para iniciar o servidor Flask em uma thread separada ───────
+def run_flask():
+    log.info("Iniciando servidor Flask para health check na porta %d", PORT)
+    app.run(host="0.0.0.0", port=PORT)
+
 # ─── Inicialização via Webhook ─────────────────────────────────────────
 if __name__ == "__main__":
     log.info("Iniciando aplicação...")
-    app = (
+    
+    # Cria uma thread para o servidor Flask
+    flask_thread = threading.Thread(target=run_flask)
+    flask_thread.daemon = True  # A thread terminará quando o programa principal terminar
+    
+    telegram_app = (
         ApplicationBuilder()
         .token(token)
         .post_init(post_init)
@@ -303,25 +324,30 @@ if __name__ == "__main__":
     )
 
     # registra handlers
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("stop", stop))
-    app.add_handler(CommandHandler("proximos", proximos))
-    app.add_handler(CommandHandler("hoje", hoje))
-    app.add_handler(CommandHandler("menu", menu))
-    app.add_handler(CommandHandler("status", status))
+    telegram_app.add_handler(CommandHandler("start", start))
+    telegram_app.add_handler(CommandHandler("stop", stop))
+    telegram_app.add_handler(CommandHandler("proximos", proximos))
+    telegram_app.add_handler(CommandHandler("hoje", hoje))
+    telegram_app.add_handler(CommandHandler("menu", menu))
+    telegram_app.add_handler(CommandHandler("status", status))
     
     # Este handler captura todas as mensagens que não são comandos
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, echo_all))
+    telegram_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, echo_all))
 
     # agenda lembretes
-    schedule_jobs(app)
+    schedule_jobs(telegram_app)
 
     log.info("Definindo webhook URL: %s", WEBHOOK_URL)
-    log.info("Iniciando listener webhook na porta %d", PORT)
-    # start webhook listener (não usar polling em ambiente de webhooks)
-    app.run_webhook(
+    
+    # Inicia o servidor Flask em uma thread separada
+    flask_thread.start()
+    log.info("Servidor Flask iniciado em thread separada")
+    
+    log.info("Preparando webhook handler na URL %s", WEBHOOK_URL)
+    # Configura o webhook para receber atualizações do Telegram
+    telegram_app.run_webhook(
         listen="0.0.0.0",
-        port=PORT,
+        port=int(os.getenv("TELEGRAM_PORT", "8443")),  # Porta diferente para o webhook do Telegram
         webhook_url=WEBHOOK_URL,
         drop_pending_updates=True,
     )
