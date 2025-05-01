@@ -42,7 +42,7 @@ PORT = int(os.getenv("PORT", "10000"))
 
 # domínio público do webhook (ou defina em .env)
 DOMAIN = os.getenv("WEBHOOK_DOMAIN", "https://cronograma-escolar.onrender.com")
-WEBHOOK_URL = os.getenv("WEBHOOK_URL", f"{https://cronograma-escolar.onrender.com/7981598752:AAFCkvUV-b_9HogUDCMUBbjAdcGbLBt48lU")
+WEBHOOK_URL = os.getenv("WEBHOOK_URL", f"{https://cronograma-escolar.onrender.com}/{7981598752:AAFCkvUV-b_9HogUDCMUBbjAdcGbLBt48lU}")
 
 # Fuso horário e caminhos
 TZ = pytz.timezone("America/Sao_Paulo")
