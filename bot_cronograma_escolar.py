@@ -19,6 +19,11 @@ import json
 import logging
 from datetime import datetime, date, time, timedelta
 from pathlib import Path
+import signal
+import sys
+import http.server
+import socketserver
+import threading
 
 import pytz
 from telegram import Update, ReplyKeyboardMarkup
@@ -60,8 +65,44 @@ logging.basicConfig(
 )
 log = logging.getLogger(__name__)
 
+# ─── Configuração do servidor health check ──────────────────────────
+class HealthCheckHandler(http.server.SimpleHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.send_header('Content-type', 'application/json')
+        self.end_headers()
+        self.wfile.write(json.dumps({
+            "status": "ok", 
+            "message": "O serviço está funcionando!",
+            "webhook_url": WEBHOOK_URL
+        }).encode())
+        log.info("Recebida requisição de health check em %s", self.path)
+    
+    def log_message(self, format, *args):
+        return
+
+def run_health_check_server(port):
+    try:
+        log.info("Iniciando servidor de health check na porta %d", port)
+        handler = HealthCheckHandler
+        httpd = socketserver.TCPServer(("", port), handler)
+        httpd.serve_forever()
+    except Exception as e:
+        log.error("Erro no servidor de health check: %s", e)
+
+# ─── Manipulador para lidar com requisições do Telegram ──────────────
+async def handle_update(update, context):
+    """Handler para depurar todas as atualizações recebidas do Telegram"""
+    log.info("Recebida atualização do Telegram: %s", update)
+    
+    # Continua o processamento normal
+    return True
+
 # ─── post_init: limpa webhook pendente, registra comandos e define webhook ────
 async def post_init(application):
+    # Configuração do webhook para depuração
+    application.add_handler(MessageHandler(filters.ALL, handle_update), group=-999)
+    
     await application.bot.delete_webhook(drop_pending_updates=True)
     await application.bot.set_my_commands(COMMANDS)
     
@@ -70,6 +111,7 @@ async def post_init(application):
     log.info("Status atual do webhook: %s", webhook_info)
     
     # Configura o webhook
+    log.info("Tentando configurar webhook para URL: %s", WEBHOOK_URL)
     result = await application.bot.set_webhook(WEBHOOK_URL)
     log.info("Resultado da configuração do webhook: %s", result)
     
@@ -332,17 +374,22 @@ def schedule_jobs(telegram_app):
         else:
             log.info("Evento %s ignorado (já passou: %s)", ev["title"], run_dt)
 
-# Esta classe responde à rota de health check do Render
-class RenderHealthCheck:
-    def __init__(self, app):
-        self.app = app
-        
-    async def health_check(self, request):
-        return {"status": "ok", "message": "O serviço está funcionando!"}
+# ─── Tratamento para encerramento do servidor ─────────────────────────
+def signal_handler(sig, frame):
+    log.info("Recebido sinal para encerrar. Encerrando servidor...")
+    sys.exit(0)
 
 # ─── Inicialização via Webhook ─────────────────────────────────────────
 if __name__ == "__main__":
     log.info("Iniciando aplicação...")
+    
+    # Registra handlers para sinais
+    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
+    
+    # Inicializa o servidor de health check
+    health_thread = threading.Thread(target=run_health_check_server, args=(PORT,))
+    health_thread.daemon = True
     
     # Configuração e inicialização do bot do Telegram
     telegram_app = (
@@ -368,14 +415,30 @@ if __name__ == "__main__":
 
     log.info("Definindo webhook URL: %s", WEBHOOK_URL)
     
-    # Cria e registra o handler de health check
-    health_check = RenderHealthCheck(telegram_app)
+    # Inicia o servidor de health check
+    try:
+        # Inicializa separadamente para depuração sem bloquear o servidor principal
+        health_thread.start()
+        log.info("Servidor de health check iniciado em thread separada")
+    except Exception as e:
+        log.error("Erro ao iniciar servidor de health check: %s", e)
     
-    log.info("Preparando webhook handler na URL %s", WEBHOOK_URL)
-    # Configura o webhook para receber atualizações do Telegram
-    telegram_app.run_webhook(
-        listen="0.0.0.0",
-        port=PORT,
-        webhook_url=WEBHOOK_URL,
-        drop_pending_updates=True,
-    )
+    try:
+        log.info("Inicializando polling para depuração...")
+        # Tenta usar polling para verificar se o bot funciona
+        telegram_app.run_polling(drop_pending_updates=True)
+    except Exception as e:
+        log.error("Erro ao iniciar polling: %s", e)
+        
+        log.info("Tentando iniciar webhook como alternativa...")
+        # Se o polling falhar, tenta usar webhook
+        try:
+            log.info("Preparando webhook handler na URL %s", WEBHOOK_URL)
+            telegram_app.run_webhook(
+                listen="0.0.0.0",
+                port=8443,  # Use uma porta diferente para o webhook
+                webhook_url=WEBHOOK_URL,
+                drop_pending_updates=True,
+            )
+        except Exception as webhook_error:
+            log.error("Erro ao iniciar webhook: %s", webhook_error)
