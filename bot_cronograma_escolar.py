@@ -138,6 +138,10 @@ def load_events() -> list[dict]:
         log.warning("Pasta cronogramas/ não encontrada ou vazia.")
         return events
 
+    # Lista todos os arquivos CSV encontrados
+    csv_files = list(CRON_DIR.glob("*.csv"))
+    log.info("Arquivos CSV encontrados: %s", [f.name for f in csv_files])
+
     for csv_path in CRON_DIR.glob("*.csv"):
         try:
             with csv_path.open(encoding="utf-8-sig") as f:
