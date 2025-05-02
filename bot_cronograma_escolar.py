@@ -394,7 +394,7 @@ if __name__ == "__main__":
     log.info("Definindo webhook URL: %s", WEBHOOK_URL)
     
     # Inicia o servidor de health check em uma thread separada
-    health_thread = threading.Thread(target=run_health_server, args=(PORT,))
+    health_thread = threading.Thread(target=run_health_check_server, args=(PORT,))
     health_thread.daemon = True  # A thread terminará quando o programa principal terminar
     health_thread.start()
     log.info("Servidor de health check iniciado em thread separada")
