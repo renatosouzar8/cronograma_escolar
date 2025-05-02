@@ -38,8 +38,6 @@ from telegram.ext import (
 token = "7981598752:AAFCkvUV-b_9HogUDCMUBbjAdcGbLBt48lU"
 HOUR = int(os.getenv("NOTIFICATION_HOUR", "14"))
 PORT = int(os.getenv("PORT", "10000"))
-# Porta para o webhook do Telegram (diferente da porta principal)
-TELEGRAM_PORT = int(os.getenv("TELEGRAM_PORT", "8443"))
 DOMAIN = "https://cronograma-escolar.onrender.com"
 WEBHOOK_URL = f"{DOMAIN}/{token}"
 
@@ -68,11 +66,19 @@ log = logging.getLogger(__name__)
 # ─── Configuração do Health Check ──────────────────────────────
 class HealthCheckHandler(http.server.SimpleHTTPRequestHandler):
     def do_GET(self):
-        self.send_response(200)
-        self.send_header('Content-type', 'application/json')
-        self.end_headers()
-        self.wfile.write(json.dumps({"status": "ok", "message": "O serviço está funcionando!"}).encode())
-        log.info("Recebida requisição de health check em %s", self.path)
+        # Verifica se a requisição é para a rota de health check
+        if self.path == "/":
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps({"status": "ok", "message": "O serviço está funcionando!"}).encode())
+            log.info("Recebida requisição de health check em %s", self.path)
+        else:
+            # Outras rotas passam para o handler do webhook
+            self.send_response(404)
+            self.send_header('Content-type', 'text/plain')
+            self.end_headers()
+            self.wfile.write(b"Not Found - Esta rota e reservada para o webhook do Telegram")
     
     # Desativa o log padrão de cada requisição para evitar poluir os logs
     def log_message(self, format, *args):
@@ -80,9 +86,12 @@ class HealthCheckHandler(http.server.SimpleHTTPRequestHandler):
 
 def run_health_check_server(port):
     handler = HealthCheckHandler
-    with socketserver.TCPServer(("", port), handler) as httpd:
-        log.info("Servidor de health check iniciado na porta %s", port)
-        httpd.serve_forever()
+    try:
+        with socketserver.TCPServer(("", port), handler) as httpd:
+            log.info("Servidor de health check iniciado na porta %s", port)
+            httpd.serve_forever()
+    except Exception as e:
+        log.error("Erro no servidor de health check: %s", e)
 
 # ─── post_init: limpa webhook pendente, registra comandos e define webhook ────
 async def post_init(application):
@@ -121,19 +130,23 @@ def load_events() -> list[dict]:
         return events
 
     for csv_path in CRON_DIR.glob("*.csv"):
-        with csv_path.open(encoding="utf-8-sig") as f:
-            reader = csv.DictReader(f, delimiter=";")
-            for row in reader:
-                d = parse_date(row.get("data", ""))
-                if not d:
-                    continue
-                events.append({
-                    "date": d,
-                    "title": row.get("titulo") or "(sem título)",
-                    "descr": row.get("descricao", "").strip(),
-                    "local": row.get("local", "").strip(),
-                    "src": csv_path.name,
-                })
+        try:
+            with csv_path.open(encoding="utf-8-sig") as f:
+                reader = csv.DictReader(f, delimiter=";")
+                for row in reader:
+                    d = parse_date(row.get("data", ""))
+                    if not d:
+                        continue
+                    events.append({
+                        "date": d,
+                        "title": row.get("titulo") or "(sem título)",
+                        "descr": row.get("descricao", "").strip(),
+                        "local": row.get("local", "").strip(),
+                        "src": csv_path.name,
+                    })
+        except Exception as e:
+            log.error("Erro ao ler arquivo %s: %s", csv_path, e)
+    
     log.info("Eventos lidos: %d", len(events))
     return events
 
@@ -141,9 +154,13 @@ def load_events() -> list[dict]:
 def load_subs() -> list[int]:
     log.info("Carregando assinantes de %s", SUBS_FILE)
     if SUBS_FILE.exists():
-        content = SUBS_FILE.read_text()
-        log.info("Conteúdo do arquivo de assinantes: %s", content)
-        return json.loads(content) 
+        try:
+            content = SUBS_FILE.read_text()
+            log.info("Conteúdo do arquivo de assinantes: %s", content)
+            return json.loads(content)
+        except Exception as e:
+            log.error("Erro ao carregar assinantes: %s", e)
+            return []
     else:
         log.warning("Arquivo de assinantes não encontrado")
         return []
@@ -151,132 +168,164 @@ def load_subs() -> list[int]:
 
 def save_subs(subs: list[int]):
     log.info("Salvando %d assinantes em %s", len(subs), SUBS_FILE)
-    SUBS_FILE.write_text(json.dumps(subs))
+    try:
+        SUBS_FILE.write_text(json.dumps(subs))
+        log.info("Assinantes salvos com sucesso")
+    except Exception as e:
+        log.error("Erro ao salvar assinantes: %s", e)
 
 # ─── Handlers de comando ────────────────────────────────────────────
 async def start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     log.info("Comando /start recebido de %s", update.effective_chat.id)
-    cid = update.effective_chat.id
-    subs = load_subs()
-    if cid not in subs:
-        subs.append(cid)
-        save_subs(subs)
-        log.info("Usuário %s inscrito com sucesso", cid)
-    else:
-        log.info("Usuário %s já estava inscrito", cid)
-    await update.message.reply_text(
-        f"✅ Inscrito! Você receberá lembretes às {HOUR}h do dia anterior.\n"
-        "Use /proximos, /hoje ou /menu."
-    )
+    try:
+        cid = update.effective_chat.id
+        subs = load_subs()
+        if cid not in subs:
+            subs.append(cid)
+            save_subs(subs)
+            log.info("Usuário %s inscrito com sucesso", cid)
+        else:
+            log.info("Usuário %s já estava inscrito", cid)
+        await update.message.reply_text(
+            f"✅ Inscrito! Você receberá lembretes às {HOUR}h do dia anterior.\n"
+            "Use /proximos, /hoje ou /menu."
+        )
+    except Exception as e:
+        log.error("Erro ao processar comando /start: %s", e)
+        await update.message.reply_text("Ocorreu um erro. Por favor, tente novamente.")
 
 
 async def stop(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     log.info("Comando /stop recebido de %s", update.effective_chat.id)
-    cid = update.effective_chat.id
-    subs = load_subs()
-    if cid in subs:
-        subs.remove(cid)
-        save_subs(subs)
-        log.info("Usuário %s removido com sucesso", cid)
-    else:
-        log.info("Usuário %s não estava inscrito", cid)
-    await update.message.reply_text("🛑 Você foi removido e não receberá mais lembretes.")
+    try:
+        cid = update.effective_chat.id
+        subs = load_subs()
+        if cid in subs:
+            subs.remove(cid)
+            save_subs(subs)
+            log.info("Usuário %s removido com sucesso", cid)
+        else:
+            log.info("Usuário %s não estava inscrito", cid)
+        await update.message.reply_text("🛑 Você foi removido e não receberá mais lembretes.")
+    except Exception as e:
+        log.error("Erro ao processar comando /stop: %s", e)
+        await update.message.reply_text("Ocorreu um erro. Por favor, tente novamente.")
 
 
 async def proximos(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     log.info("Comando /proximos recebido de %s", update.effective_chat.id)
-    today = datetime.now(TZ).date()
-    evs = [e for e in sorted(load_events(), key=lambda e: e["date"]) if e["date"] >= today]
-    if not evs:
-        log.info("Nenhum evento futuro encontrado")
-        await update.message.reply_text("Nenhum evento futuro encontrado.")
-        return
+    try:
+        today = datetime.now(TZ).date()
+        evs = [e for e in sorted(load_events(), key=lambda e: e["date"]) if e["date"] >= today]
+        if not evs:
+            log.info("Nenhum evento futuro encontrado")
+            await update.message.reply_text("Nenhum evento futuro encontrado.")
+            return
 
-    grupos: dict[str, list[dict]] = {}
-    for e in evs:
-        grupos.setdefault(e["src"], []).append(e)
+        grupos: dict[str, list[dict]] = {}
+        for e in evs:
+            grupos.setdefault(e["src"], []).append(e)
 
-    msgs = []
-    LIMITE = 5
-    for src, lista in grupos.items():
-        nome = "Théo" if "theo" in src.lower() else "Liz"
-        linhas = [f"*Próximos eventos – {nome}:*"]
-        for ev in lista[:LIMITE]:
-            linhas.append(f"• {ev['date'].strftime('%d/%m')}: {ev['title']}")
-        msgs.append("\n".join(linhas))
+        msgs = []
+        LIMITE = 5
+        for src, lista in grupos.items():
+            nome = "Théo" if "theo" in src.lower() else "Liz"
+            linhas = [f"*Próximos eventos – {nome}:*"]
+            for ev in lista[:LIMITE]:
+                linhas.append(f"• {ev['date'].strftime('%d/%m')}: {ev['title']}")
+            msgs.append("\n".join(linhas))
 
-    await update.message.reply_text("\n\n".join(msgs), parse_mode="Markdown")
-    log.info("Resposta de /proximos enviada")
+        await update.message.reply_text("\n\n".join(msgs), parse_mode="Markdown")
+        log.info("Resposta de /proximos enviada")
+    except Exception as e:
+        log.error("Erro ao processar comando /proximos: %s", e)
+        await update.message.reply_text("Ocorreu um erro. Por favor, tente novamente.")
 
 
 async def hoje(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     log.info("Comando /hoje recebido de %s", update.effective_chat.id)
-    tomorrow = (datetime.now(TZ) + timedelta(days=1)).date()
-    evs = [e for e in load_events() if e["date"] == tomorrow]
-    if not evs:
-        log.info("Nenhum evento para amanhã")
-        await update.message.reply_text("Não há eventos agendados para amanhã.")
-        return
+    try:
+        tomorrow = (datetime.now(TZ) + timedelta(days=1)).date()
+        evs = [e for e in load_events() if e["date"] == tomorrow]
+        if not evs:
+            log.info("Nenhum evento para amanhã")
+            await update.message.reply_text("Não há eventos agendados para amanhã.")
+            return
 
-    grupos: dict[str, list[dict]] = {}
-    for e in evs:
-        grupos.setdefault(e["src"], []).append(e)
+        grupos: dict[str, list[dict]] = {}
+        for e in evs:
+            grupos.setdefault(e["src"], []).append(e)
 
-    partes = []
-    for src, lista in grupos.items():
-        nome = "Théo" if "theo" in src.lower() else "Liz"
-        linhas = [f"*Eventos de amanhã – {nome}:*"]
-        for ev in lista:
-            linhas.append(f"• {ev['title']}")
-        partes.append("\n".join(linhas))
+        partes = []
+        for src, lista in grupos.items():
+            nome = "Théo" if "theo" in src.lower() else "Liz"
+            linhas = [f"*Eventos de amanhã – {nome}:*"]
+            for ev in lista:
+                linhas.append(f"• {ev['title']}")
+            partes.append("\n".join(linhas))
 
-    await update.message.reply_text("\n\n".join(partes), parse_mode="Markdown")
-    log.info("Resposta de /hoje enviada")
+        await update.message.reply_text("\n\n".join(partes), parse_mode="Markdown")
+        log.info("Resposta de /hoje enviada")
+    except Exception as e:
+        log.error("Erro ao processar comando /hoje: %s", e)
+        await update.message.reply_text("Ocorreu um erro. Por favor, tente novamente.")
 
 
 async def menu(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     log.info("Comando /menu recebido de %s", update.effective_chat.id)
-    teclas = [["/hoje", "/proximos"], ["/start", "/stop"]]
-    kb = ReplyKeyboardMarkup(teclas, resize_keyboard=True, one_time_keyboard=True)
-    texto = (
-        "*Menu de comandos*\n\n"
-        "📅 /hoje ‒ eventos de amanhã\n"
-        "📆 /proximos ‒ próximos eventos por cronograma\n"
-        "✅ /start ‒ receber lembretes\n"
-        "⛔ /stop ‒ cancelar lembretes\n"
-    )
-    await update.message.reply_text(texto, parse_mode="Markdown", reply_markup=kb)
-    log.info("Resposta de /menu enviada")
+    try:
+        teclas = [["/hoje", "/proximos"], ["/start", "/stop"]]
+        kb = ReplyKeyboardMarkup(teclas, resize_keyboard=True, one_time_keyboard=True)
+        texto = (
+            "*Menu de comandos*\n\n"
+            "📅 /hoje ‒ eventos de amanhã\n"
+            "📆 /proximos ‒ próximos eventos por cronograma\n"
+            "✅ /start ‒ receber lembretes\n"
+            "⛔ /stop ‒ cancelar lembretes\n"
+        )
+        await update.message.reply_text(texto, parse_mode="Markdown", reply_markup=kb)
+        log.info("Resposta de /menu enviada")
+    except Exception as e:
+        log.error("Erro ao processar comando /menu: %s", e)
+        await update.message.reply_text("Ocorreu um erro. Por favor, tente novamente.")
 
 
 # Novo comando para verificar o status do webhook
 async def status(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     log.info("Comando /status recebido de %s", update.effective_chat.id)
-    webhook_info = await ctx.bot.get_webhook_info()
-    info_text = (
-        f"*Status do Webhook*\n\n"
-        f"URL: `{webhook_info.url}`\n"
-        f"Mensagens pendentes: {webhook_info.pending_update_count}\n"
-    )
-    
-    if webhook_info.last_error_date:
-        error_date = datetime.fromtimestamp(webhook_info.last_error_date, TZ).strftime('%Y-%m-%d %H:%M:%S')
-        info_text += f"Último erro: {error_date}\n"
-        info_text += f"Mensagem de erro: {webhook_info.last_error_message}\n"
-    else:
-        info_text += "Sem erros recentes.\n"
-    
-    info_text += f"\nInscritos: {len(load_subs())}"
-    
-    await update.message.reply_text(info_text, parse_mode="Markdown")
-    log.info("Resposta de /status enviada")
+    try:
+        webhook_info = await ctx.bot.get_webhook_info()
+        info_text = (
+            f"*Status do Webhook*\n\n"
+            f"URL: `{webhook_info.url}`\n"
+            f"Mensagens pendentes: {webhook_info.pending_update_count}\n"
+        )
+        
+        if webhook_info.last_error_date:
+            error_date = datetime.fromtimestamp(webhook_info.last_error_date, TZ).strftime('%Y-%m-%d %H:%M:%S')
+            info_text += f"Último erro: {error_date}\n"
+            info_text += f"Mensagem de erro: {webhook_info.last_error_message}\n"
+        else:
+            info_text += "Sem erros recentes.\n"
+        
+        info_text += f"\nInscritos: {len(load_subs())}"
+        
+        await update.message.reply_text(info_text, parse_mode="Markdown")
+        log.info("Resposta de /status enviada")
+    except Exception as e:
+        log.error("Erro ao processar comando /status: %s", e)
+        await update.message.reply_text("Ocorreu um erro. Por favor, tente novamente.")
 
 
 # Handler para registrar todas as mensagens recebidas
 async def echo_all(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    log.info("Mensagem recebida: '%s' de %s", update.message.text, update.effective_chat.id)
-    await update.message.reply_text(f"Recebi sua mensagem: {update.message.text}")
-    log.info("Resposta de echo enviada")
+    try:
+        log.info("Mensagem recebida: '%s' de %s", update.message.text, update.effective_chat.id)
+        await update.message.reply_text(f"Recebi sua mensagem: {update.message.text}")
+        log.info("Resposta de echo enviada")
+    except Exception as e:
+        log.error("Erro ao processar mensagem: %s", e)
+        await update.message.reply_text("Ocorreu um erro. Por favor, tente novamente.")
 
 # ─── Notificação agendada ────────────────────────────────────────────
 async def notify(ctx: ContextTypes.DEFAULT_TYPE):
@@ -316,21 +365,11 @@ def schedule_jobs(telegram_app):
         else:
             log.info("Evento %s ignorado (já passou: %s)", ev["title"], run_dt)
 
-# ─── Função para iniciar o servidor de health check em uma thread separada ───────
-def run_health_server():
-    # Usa a porta definida na variável PORT para o health check
-    health_port = PORT
-    log.info("Iniciando servidor de health check na porta %d", health_port)
-    run_health_check_server(health_port)
-
 # ─── Inicialização via Webhook ─────────────────────────────────────────
 if __name__ == "__main__":
     log.info("Iniciando aplicação...")
     
-    # Cria uma thread para o servidor de health check
-    health_thread = threading.Thread(target=run_health_server)
-    health_thread.daemon = True  # A thread terminará quando o programa principal terminar
-    
+    # Configuração e inicialização do bot do Telegram
     telegram_app = (
         ApplicationBuilder()
         .token(token)
@@ -355,14 +394,16 @@ if __name__ == "__main__":
     log.info("Definindo webhook URL: %s", WEBHOOK_URL)
     
     # Inicia o servidor de health check em uma thread separada
+    health_thread = threading.Thread(target=run_health_server, args=(PORT,))
+    health_thread.daemon = True  # A thread terminará quando o programa principal terminar
     health_thread.start()
     log.info("Servidor de health check iniciado em thread separada")
     
     log.info("Preparando webhook handler na URL %s", WEBHOOK_URL)
-    # Configura o webhook para receber atualizações do Telegram usando uma porta DIFERENTE
+    # Configura o webhook para receber atualizações do Telegram
     telegram_app.run_webhook(
         listen="0.0.0.0",
-        port=TELEGRAM_PORT,  # Usa a porta específica para o Telegram
+        port=PORT,  # Usa a mesma porta para o webhook do Telegram
         webhook_url=WEBHOOK_URL,
         drop_pending_updates=True,
     )
