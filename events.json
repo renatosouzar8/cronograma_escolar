@@ -1,0 +1,163 @@
+[
+  {
+    "aluno": "Liz",
+    "data": "04/08",
+    "dia_semana": "Segunda-feira",
+    "evento": "Volta às Aulas",
+    "preparacao": "Boas-vindas à classe. Nenhuma preparação especial é necessária."
+  },
+  {
+    "aluno": "Liz",
+    "data": "08/08",
+    "dia_semana": "Sexta-feira",
+    "evento": "Compartilhamento de Pesquisa sobre os Jogos Olímpicos",
+    "preparacao": "Preparar um breve trabalho de pesquisa sobre os \\\"Jogos Olímpicos\\\" com a participação de Liz. Deve ser em uma folha de papel padrão e será compartilhado com a classe."
+  },
+  {
+    "aluno": "Liz",
+    "data": "09/08",
+    "dia_semana": "Sábado",
+    "evento": "Festa da Família (Dia dos Pais)",
+    "preparacao": "Evento para as famílias. A escola fornecerá mais detalhes oportunamente."
+  },
+  {
+    "aluno": "Liz",
+    "data": "13/08",
+    "dia_semana": "Quarta-feira",
+    "evento": "Introdução à Escrita Cursiva",
+    "preparacao": "Trazer para a escola: Um caderno grande de capa dura (50 folhas) com pauta verde para prática de escrita cursiva."
+  },
+  {
+    "aluno": "Liz",
+    "data": "20/08",
+    "dia_semana": "Quarta-feira",
+    "evento": "Compartilhamento de Pesquisa sobre Mascotes Olímpicos",
+    "preparacao": "Ajudar Liz a pesquisar um mascote olímpico de sua escolha. Imprimir uma imagem e pedir que ele escreva uma pequena frase sobre o mascote para compartilhar com a classe."
+  },
+  {
+    "aluno": "Liz",
+    "data": "22/08",
+    "dia_semana": "Sexta-feira",
+    "evento": "Dia do Folclore",
+    "preparacao": "Traje: Liz pode vir para a escola vestido como um personagem do folclore brasileiro ou usar acessórios relacionados."
+  },
+  {
+    "aluno": "Liz",
+    "data": "25/08",
+    "dia_semana": "Segunda-feira",
+    "evento": "Homenagem ao Dia do Soldado",
+    "preparacao": "Vestimenta: Liz deve usar uma roupa ou acessório verde para ir à escola."
+  },
+  {
+    "aluno": "Liz",
+    "data": "27/08",
+    "dia_semana": "Quarta-feira",
+    "evento": "Portas Abertas - Nível II (13:30)",
+    "preparacao": "Pais e familiares são convidados a visitar a escola, observar as aulas e conhecer os professores. O evento começa às 13:30."
+  },
+  {
+    "aluno": "Liz",
+    "data": "29/08",
+    "dia_semana": "Sexta-feira",
+    "evento": "Comemoração dos Aniversariantes de Agosto",
+    "preparacao": "Comemoração para os alunos com aniversário em agosto. A escola fornecerá mais informações."
+  },
+  {
+    "aluno": "Theo",
+    "data": "04/08",
+    "dia_semana": "Segunda-feira",
+    "evento": "Primeiro Dia de Volta às Aulas",
+    "preparacao": "Nenhuma preparação específica indicada."
+  },
+  {
+    "aluno": "Theo",
+    "data": "08/08",
+    "dia_semana": "Sexta-feira",
+    "evento": "Aula de Culinária: Sanduíche Natural",
+    "preparacao": "Trazer: 1 pacote de guardanapos."
+  },
+  {
+    "aluno": "Theo",
+    "data": "09/08",
+    "dia_semana": "Sábado",
+    "evento": "Dia da Família (Comemoração do Dia dos Pais)",
+    "preparacao": "A escola fornecerá mais informações oportunamente."
+  },
+  {
+    "aluno": "Theo",
+    "data": "20/08",
+    "dia_semana": "Quarta-feira",
+    "evento": "Portas Abertas - 1º Ano",
+    "preparacao": "Evento começa às 17:10."
+  },
+  {
+    "aluno": "Theo",
+    "data": "20/08",
+    "dia_semana": "Quarta-feira",
+    "evento": "Avaliação AV3: História",
+    "preparacao": "Estudar o Capítulo 6 (Volume B), Páginas 198, 200, 202, 203, 206. Tópico: \\\"O conceito de tempo e transformações.\\\""
+  },
+  {
+    "aluno": "Theo",
+    "data": "21/08",
+    "dia_semana": "Quinta-feira",
+    "evento": "Avaliação AV3: Produção (Redação)",
+    "preparacao": "Estudar o Capítulo 6 (Volume B), Páginas 74, 75, 76, 77, 78. Tópico: \\\"Narrativas Fabulosas (Fábulas).\\\""
+  },
+  {
+    "aluno": "Theo",
+    "data": "22/08",
+    "dia_semana": "Sexta-feira",
+    "evento": "Dia do Folclore",
+    "preparacao": "Vir para a escola com fantasia ou acessório representando um personagem do folclore brasileiro."
+  },
+  {
+    "aluno": "Theo",
+    "data": "22/08",
+    "dia_semana": "Sexta-feira",
+    "evento": "Avaliação AV3: Português",
+    "preparacao": "Estudar o Capítulo 6 (Volume B), Páginas 84, 85, 87, 88, 89, 90. Tópicos: \\\"Antônimos, Letra J, Letra N.\\\""
+  },
+  {
+    "aluno": "Theo",
+    "data": "25/08",
+    "dia_semana": "Segunda-feira",
+    "evento": "Dia do Soldado",
+    "preparacao": "Vestir-se de verde ou usar um acessório verde."
+  },
+  {
+    "aluno": "Theo",
+    "data": "25/08",
+    "dia_semana": "Segunda-feira",
+    "evento": "Avaliação AV3: Matemática",
+    "preparacao": "Estudar o Capítulo 6 (Volume B), Páginas 75, 76, 78, 83, 84, 86. Tópico: \\\"Adição e Subtração\\\". Trazer o Material Dourado."
+  },
+  {
+    "aluno": "Theo",
+    "data": "26/08",
+    "dia_semana": "Terça-feira",
+    "evento": "Avaliação AV3: Geografia",
+    "preparacao": "Estudar o Capítulo 6 (Volume B), Páginas 256, 257, 259, 260, 261, 263, 264. Tópico: \\\"Temperatura, clima, alimentação e vestuário.\\\""
+  },
+  {
+    "aluno": "Theo",
+    "data": "27/08",
+    "dia_semana": "Quarta-feira",
+    "evento": "Avaliação AV3: Inglês",
+    "preparacao": "Estudar o Livro Skill Set 1st B2, Lições 1 & 2 (Páginas 3 & 10). Tópico: \\\"Vocabulário.\\\""
+  },
+  {
+    "aluno": "Theo",
+    "data": "28/08",
+    "dia_semana": "Quinta-feira",
+    "evento": "Avaliação AV3: Ciências",
+    "preparacao": "Estudar o Capítulo 6 (Volume B), Páginas 142, 143, 144, 147, 148, 149, 152, 155. Tópico: \\\"Cuidando do nosso corpo: alimentação saudável, lazer e sono.\\\""
+  },
+  {
+    "aluno": "Theo",
+    "data": "29/08",
+    "dia_semana": "Sexta-feira",
+    "evento": "Comemoração dos Aniversariantes de Agosto",
+    "preparacao": "A escola fornecerá mais informações."
+  }
+]

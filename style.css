@@ -1,0 +1,58 @@
+:root {
+    --theo-color: #3b82f6; /* blue-500 */
+    --liz-color: #14b8a6; /* teal-500 */
+    --theo-color-light: #eff6ff; /* blue-50 */
+    --liz-color-light: #f0fdfa; /* teal-50 */
+}
+
+body {
+    font-family: 'Roboto', sans-serif;
+}
+
+.text-theo-color {
+    color: var(--theo-color);
+}
+
+.text-liz-color {
+    color: var(--liz-color);
+}
+
+.border-theo-color {
+    border-color: var(--theo-color);
+}
+
+.border-liz-color {
+    border-color: var(--liz-color);
+}
+
+.event-card {
+    background-color: white;
+    border-radius: 0.75rem;
+    box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+    transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+    border-left-width: 5px;
+    overflow: hidden;
+}
+
+.event-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+}
+
+.event-card.theo-card {
+    border-left-color: var(--theo-color);
+}
+
+.event-card.liz-card {
+    border-left-color: var(--liz-color);
+}
+
+.event-card-header.theo-header {
+    background-color: var(--theo-color-light);
+    color: var(--theo-color);
+}
+
+.event-card-header.liz-header {
+    background-color: var(--liz-color-light);
+    color: var(--liz-color);
+}
